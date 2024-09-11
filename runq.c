@@ -14,6 +14,10 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #endif
+
+#include "encoding.h"
+#include "util_llama3_tiktoken.h"
+
 // ----------------------------------------------------------------------------
 // Globals
 int GS = 0; // group size global for quantization of the weights
@@ -91,20 +95,20 @@ typedef struct {
 void malloc_run_state(RunState *s, Config *p) {
   // we calloc instead of malloc to keep valgrind happy
   int kv_dim = (p->dim * p->n_kv_heads) / p->n_heads;
-  s->x = calloc(p->dim, sizeof(float));
-  s->xb = calloc(p->dim, sizeof(float));
-  s->xb2 = calloc(p->dim, sizeof(float));
-  s->hb = calloc(p->hidden_dim, sizeof(float));
-  s->hb2 = calloc(p->hidden_dim, sizeof(float));
-  s->xq = (QuantizedTensor){.q = calloc(p->dim, sizeof(int8_t)), .s = calloc(p->dim, sizeof(float))};
-  s->hq = (QuantizedTensor){.q = calloc(p->hidden_dim, sizeof(int8_t)), .s = calloc(p->hidden_dim, sizeof(float))};
-  s->q = calloc(p->dim, sizeof(float));
-  s->k = calloc(kv_dim, sizeof(float));
-  s->v = calloc(kv_dim, sizeof(float));
-  s->att = calloc(p->n_heads * p->seq_len, sizeof(float));
-  s->logits = calloc(p->vocab_size, sizeof(float));
-  s->key_cache = calloc(p->n_layers * p->seq_len * kv_dim, sizeof(float));
-  s->value_cache = calloc(p->n_layers * p->seq_len * kv_dim, sizeof(float));
+  s->x = (float *)calloc(p->dim, sizeof(float));
+  s->xb = (float *)calloc(p->dim, sizeof(float));
+  s->xb2 = (float *)calloc(p->dim, sizeof(float));
+  s->hb = (float *)calloc(p->hidden_dim, sizeof(float));
+  s->hb2 = (float *)calloc(p->hidden_dim, sizeof(float));
+  s->xq = (QuantizedTensor){.q = (int8_t *)calloc(p->dim, sizeof(int8_t)), .s = (float *)calloc(p->dim, sizeof(float))};
+  s->hq = (QuantizedTensor){.q = (int8_t *)calloc(p->hidden_dim, sizeof(int8_t)), .s = (float *)calloc(p->hidden_dim, sizeof(float))};
+  s->q = (float *)calloc(p->dim, sizeof(float));
+  s->k = (float *)calloc(kv_dim, sizeof(float));
+  s->v = (float *)calloc(kv_dim, sizeof(float));
+  s->att = (float *)calloc(p->n_heads * p->seq_len, sizeof(float));
+  s->logits = (float *)calloc(p->vocab_size, sizeof(float));
+  s->key_cache = (float *)calloc(p->n_layers * p->seq_len * kv_dim, sizeof(float));
+  s->value_cache = (float *)calloc(p->n_layers * p->seq_len * kv_dim, sizeof(float));
   // ensure all mallocs went fine
   if (!s->x || !s->xb || !s->xb2 || !s->hb || !s->hb2 || !s->q || !s->k || !s->v || !s->att || !s->logits || !s->key_cache || !s->value_cache) {
     fprintf(stderr, "malloc failed!\n");
@@ -171,7 +175,7 @@ void quantize(QuantizedTensor *qx, float *x, int n) {
 /* initialize `n` x quantized tensor (with `size_each` elements), starting from memory pointed at *ptr */
 QuantizedTensor *init_quantized_tensors(void **ptr, int n, int size_each) {
   void *p = *ptr;
-  QuantizedTensor *res = malloc(n * sizeof(QuantizedTensor));
+  QuantizedTensor *res = (QuantizedTensor *)malloc(n * sizeof(QuantizedTensor));
   for (int i = 0; i < n; i++) {
     /* map quantized int8 values*/
     res[i].q = (int8_t *)p;
@@ -199,7 +203,7 @@ void memory_map_weights(TransformerWeights *w, Config *p, void *ptr, uint8_t sha
   ptr = (void *)fptr; // now cast the pointer back to void*
   w->q_tokens = init_quantized_tensors(&ptr, 1, p->vocab_size * p->dim);
   // dequantize token embedding table
-  w->token_embedding_table = malloc(p->vocab_size * p->dim * sizeof(float));
+  w->token_embedding_table = (float *)malloc(p->vocab_size * p->dim * sizeof(float));
   dequantize(w->q_tokens, w->token_embedding_table, p->vocab_size * p->dim);
 
   w->wq = init_quantized_tensors(&ptr, p->n_layers, p->dim * (p->n_heads * head_size));
@@ -268,7 +272,7 @@ void read_checkpoint(char *checkpoint, Config *config, TransformerWeights *weigh
     fprintf(stderr, "open failed!\n");
     exit(EXIT_FAILURE);
   }
-  *data = mmap(NULL, *file_size, PROT_READ, MAP_PRIVATE, *fd, 0);
+  *data =(float *) mmap(NULL, *file_size, PROT_READ, MAP_PRIVATE, *fd, 0);
   if (*data == MAP_FAILED) {
     fprintf(stderr, "mmap failed!\n");
     exit(EXIT_FAILURE);
@@ -618,7 +622,7 @@ void safe_printf(char *piece) {
 int str_lookup(char *str, TokenIndex *sorted_vocab, int vocab_size) {
   // efficiently find the perfect match for str in vocab, return its index or -1 if not found
   TokenIndex tok = {.str = str}; // acts as the key to search for
-  TokenIndex *res = bsearch(&tok, sorted_vocab, vocab_size, sizeof(TokenIndex), compare_tokens);
+  TokenIndex *res = (TokenIndex *)bsearch(&tok, sorted_vocab, vocab_size, sizeof(TokenIndex), compare_tokens);
   return res != NULL ? res->id : -1;
 }
 
@@ -632,7 +636,7 @@ void encode(Tokenizer *t, char *text, int8_t bos, int8_t eos, int *tokens, int *
 
   if (t->sorted_vocab == NULL) {
     // lazily malloc and sort the vocabulary
-    t->sorted_vocab = malloc(t->vocab_size * sizeof(TokenIndex));
+    t->sorted_vocab = (TokenIndex *)malloc(t->vocab_size * sizeof(TokenIndex));
     for (int i = 0; i < t->vocab_size; i++) {
       t->sorted_vocab[i].str = t->vocab[i];
       t->sorted_vocab[i].id = i;
@@ -642,7 +646,7 @@ void encode(Tokenizer *t, char *text, int8_t bos, int8_t eos, int *tokens, int *
 
   // create a temporary buffer that will store merge candidates of always two consecutive tokens
   // *2 for concat, +1 for null terminator +2 for UTF8 (in case max_token_length is 1)
-  char *str_buffer = malloc((t->max_token_length * 2 + 1 + 2) * sizeof(char));
+  char *str_buffer = (char *)malloc((t->max_token_length * 2 + 1 + 2) * sizeof(char));
   size_t str_len = 0;
 
   // start at 0 tokens
@@ -864,7 +868,7 @@ void build_sampler(Sampler *sampler, int vocab_size, float temperature, float to
   sampler->topp = topp;
   sampler->rng_state = rng_seed;
   // buffer only used with nucleus sampling; may not need but it's ~small
-  sampler->probindex = malloc(sampler->vocab_size * sizeof(ProbIndex));
+  sampler->probindex = (ProbIndex *)malloc(sampler->vocab_size * sizeof(ProbIndex));
 }
 
 void free_sampler(Sampler *sampler) { free(sampler->probindex); }
@@ -921,20 +925,34 @@ long time_in_ms() {
 // generation loop
 
 void generate(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, char *prompt, int steps) {
-  char *empty_prompt = "";
+  char empty_prompt[] = "";
   if (prompt == NULL) {
     prompt = empty_prompt;
   }
 
   // encode the (string) prompt into tokens sequence
   int num_prompt_tokens = 0;
-  int *prompt_tokens = (int *)malloc((strlen(prompt) + 3) * sizeof(int)); // +3 for '\0', ?BOS, ?EOS
-  encode(tokenizer, prompt, 1, 0, prompt_tokens, &num_prompt_tokens);
-  if (num_prompt_tokens < 1) {
-    fprintf(stderr, "something is wrong, expected at least 1 prompt token\n");
-    exit(EXIT_FAILURE);
-  }
+  //  int *prompt_tokens = (int *)malloc((strlen(prompt) + 3) * sizeof(int)); // +3 for '\0', ?BOS, ?EOS
+  //  encode(tokenizer, prompt, 1, 0, prompt_tokens, &num_prompt_tokens);
+  //  if (num_prompt_tokens < 1) {
+  //    fprintf(stderr, "something is wrong, expected at least 1 prompt token\n");
+  //    exit(EXIT_FAILURE);
+  //  }
 
+  TFilePathResourceReader reader("./cpp-tiktoken/tokenizer.model");
+  auto encoder = GptEncoding::get_encoding_llama3(LanguageModel::CL100K_BASE, &reader);
+  //  auto encoder = GptEncoding::get_encoding_llama3(LanguageModel::O200K_BASE, &reader);
+  auto tokens = encoder->encode(prompt, {}, {});
+  //  auto tokens = encoder->encode(prompt);
+  //  std::cout << "enc " << tokens.size() << "\n";
+
+  // add BOS
+  tokens.insert(tokens.begin(), 128000);
+  //  std::cout << "enc " << tokens.size() << "\n";
+    
+  int *prompt_tokens = tokens.data();
+  num_prompt_tokens = tokens.size();
+  
   // start the main loop
   long start = 0;               // used to time our code, only initialized after first iteration
   int next;                     // will store the next token in the sequence
@@ -960,9 +978,14 @@ void generate(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, 
     if ((next == 128001 || next == 128009) && pos > num_prompt_tokens)
       break;
     // print the token as string, decode it with the Tokenizer object
-    char *piece = decode(tokenizer, token, next);
-    safe_printf(piece); // same as printf("%s", piece), but skips "unsafe" bytes
-    fflush(stdout);
+    //    char *piece = decode(tokenizer, token, next);
+    //    safe_printf(piece); // same as printf("%s", piece), but skips "unsafe" bytes
+    //    fflush(stdout);
+
+    std::vector<int> tmp;
+    tmp.push_back(next);
+    std::cout << encoder->decode(tmp) << std::flush;
+
     token = next;
 
     // init the timer here because the first iteration can be slower
@@ -978,7 +1001,7 @@ void generate(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, 
     fprintf(stderr, "achieved tok/s: %f\n", (pos - 1) / (double)(end - start) * 1000);
   }
 
-  free(prompt_tokens);
+  //  free(prompt_tokens);
 }
 
 void read_stdin(const char *guide, char *buffer, size_t bufsize) {
