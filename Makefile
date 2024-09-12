@@ -6,13 +6,16 @@ CPPFLAGS= -Wall -O3 -march=native -fopenmp -fpermissive -I$(TIKTOKEN)
 #CPPFLAGS= -Wall -g -fpermissive -I$(TIKTOKEN)
 LFLAGS= -fopenmp -L$(TIKTOKEN) -lcpptiktoken -lpcre2-8 -lfmt
 
-default: runq
+default: runq run
+
+run: run.o
+	$(CXX) -o $@ $< $(LFLAGS)
 
 runq: runq.o
 	$(CXX) -o $@ $< $(LFLAGS)
 
-runq.o: runq.c
+%.o: %.c
 	$(CXX) $(CPPFLAGS) -c $<
 
 clean:;
-	rm -rf runq runq.o
+	rm -rf *.o runq run

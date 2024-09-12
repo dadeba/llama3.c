@@ -13,6 +13,9 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #endif
+
+#include "util_llama3_tiktoken.h"
+
 // ----------------------------------------------------------------------------
 // Transformer model
 
@@ -77,16 +80,16 @@ typedef struct {
 void malloc_run_state(RunState *s, Config *p) {
   // we calloc instead of malloc to keep valgrind happy
   int kv_dim = (p->dim * p->n_kv_heads) / p->n_heads;
-  s->x = calloc(p->dim, sizeof(float));
-  s->xb = calloc(p->dim, sizeof(float));
-  s->xb2 = calloc(p->dim, sizeof(float));
-  s->hb = calloc(p->hidden_dim, sizeof(float));
-  s->hb2 = calloc(p->hidden_dim, sizeof(float));
-  s->q = calloc(p->dim, sizeof(float));
-  s->key_cache = calloc(p->n_layers * p->seq_len * kv_dim, sizeof(float));
-  s->value_cache = calloc(p->n_layers * p->seq_len * kv_dim, sizeof(float));
-  s->att = calloc(p->n_heads * p->seq_len, sizeof(float));
-  s->logits = calloc(p->vocab_size, sizeof(float));
+  s->x = (float *)calloc(p->dim, sizeof(float));
+  s->xb = (float *)calloc(p->dim, sizeof(float));
+  s->xb2 = (float *)calloc(p->dim, sizeof(float));
+  s->hb = (float *)calloc(p->hidden_dim, sizeof(float));
+  s->hb2 = (float *)calloc(p->hidden_dim, sizeof(float));
+  s->q = (float *)calloc(p->dim, sizeof(float));
+  s->key_cache = (float *)calloc(p->n_layers * p->seq_len * kv_dim, sizeof(float));
+  s->value_cache = (float *)calloc(p->n_layers * p->seq_len * kv_dim, sizeof(float));
+  s->att = (float *)calloc(p->n_heads * p->seq_len, sizeof(float));
+  s->logits = (float *)calloc(p->vocab_size, sizeof(float));
   // ensure all mallocs went fine
   if (!s->x || !s->xb || !s->xb2 || !s->hb || !s->hb2 || !s->q || !s->key_cache || !s->value_cache || !s->att || !s->logits) {
     fprintf(stderr, "malloc failed!\n");
@@ -166,7 +169,7 @@ void read_checkpoint(char *checkpoint, Config *config, TransformerWeights *weigh
     fprintf(stderr, "open failed!\n");
     exit(EXIT_FAILURE);
   }
-  *data = mmap(NULL, *file_size, PROT_READ, MAP_PRIVATE, *fd, 0);
+  *data = (float *)mmap(NULL, *file_size, PROT_READ, MAP_PRIVATE, *fd, 0);
   if (*data == MAP_FAILED) {
     fprintf(stderr, "mmap failed!\n");
     exit(EXIT_FAILURE);
@@ -484,7 +487,7 @@ void safe_printf(char *piece) {
 int str_lookup(char *str, TokenIndex *sorted_vocab, int vocab_size) {
   // efficiently find the perfect match for str in vocab, return its index or -1 if not found
   TokenIndex tok = {.str = str}; // acts as the key to search for
-  TokenIndex *res = bsearch(&tok, sorted_vocab, vocab_size, sizeof(TokenIndex), compare_tokens);
+  TokenIndex *res = (TokenIndex *)bsearch(&tok, sorted_vocab, vocab_size, sizeof(TokenIndex), compare_tokens);
   return res != NULL ? res->id : -1;
 }
 
@@ -498,7 +501,7 @@ void encode(Tokenizer *t, char *text, int8_t bos, int8_t eos, int *tokens, int *
 
   if (t->sorted_vocab == NULL) {
     // lazily malloc and sort the vocabulary
-    t->sorted_vocab = malloc(t->vocab_size * sizeof(TokenIndex));
+    t->sorted_vocab = (TokenIndex *)malloc(t->vocab_size * sizeof(TokenIndex));
     for (int i = 0; i < t->vocab_size; i++) {
       t->sorted_vocab[i].str = t->vocab[i];
       t->sorted_vocab[i].id = i;
@@ -508,7 +511,7 @@ void encode(Tokenizer *t, char *text, int8_t bos, int8_t eos, int *tokens, int *
 
   // create a temporary buffer that will store merge candidates of always two consecutive tokens
   // *2 for concat, +1 for null terminator +2 for UTF8 (in case max_token_length is 1)
-  char *str_buffer = malloc((t->max_token_length * 2 + 1 + 2) * sizeof(char));
+  char *str_buffer = (char *)malloc((t->max_token_length * 2 + 1 + 2) * sizeof(char));
   size_t str_len = 0;
 
   // start at 0 tokens
@@ -730,7 +733,7 @@ void build_sampler(Sampler *sampler, int vocab_size, float temperature, float to
   sampler->topp = topp;
   sampler->rng_state = rng_seed;
   // buffer only used with nucleus sampling; may not need but it's ~small
-  sampler->probindex = malloc(sampler->vocab_size * sizeof(ProbIndex));
+  sampler->probindex = (ProbIndex *)malloc(sampler->vocab_size * sizeof(ProbIndex));
 }
 
 void free_sampler(Sampler *sampler) { free(sampler->probindex); }
@@ -795,7 +798,7 @@ void generate(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, 
   // encode the (string) prompt into tokens sequence
   int num_prompt_tokens = 0;
   int *prompt_tokens = (int *)malloc((strlen(prompt) + 3) * sizeof(int)); // +3 for '\0', ?BOS, ?EOS
-  encode(tokenizer, prompt, 1, 0, prompt_tokens, &num_prompt_tokens);
+  encode_tiktoken(encoder, prompt, 1, 0, prompt_tokens, &num_prompt_tokens);
   if (num_prompt_tokens < 1) {
     fprintf(stderr, "something is wrong, expected at least 1 prompt token\n");
     exit(EXIT_FAILURE);
@@ -825,10 +828,9 @@ void generate(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, 
     // data-dependent terminating condition: the BOS (=1) token delimits sequences
     if ((next == 128001 || next == 128009) && pos > num_prompt_tokens)
       break;
+
     // print the token as string, decode it with the Tokenizer object
-    char *piece = decode(tokenizer, token, next);
-    safe_printf(piece); // same as printf("%s", piece), but skips "unsafe" bytes
-    fflush(stdout);
+    output(encoder, token, next);
     token = next;
 
     // init the timer here because the first iteration can be slower
@@ -903,7 +905,7 @@ void chat(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, char
         }
         if (system_prompt != NULL) {
           int num_system_prompt_tokens = 0;
-          encode(tokenizer, system_prompt, 0, 0, system_prompt_tokens, &num_system_prompt_tokens);
+          encode_tiktoken(encoder, system_prompt, 0, 0, system_prompt_tokens, &num_system_prompt_tokens);
           for (int i = 0; i < num_system_prompt_tokens; i++) {
             prompt_tokens[num_prompt_tokens++] = system_prompt_tokens[i];
           }
@@ -928,7 +930,7 @@ void chat(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, char
       }
       int num_user_prompt_tokens = 0;
       // encode the user prompt into tokens
-      encode(tokenizer, user_prompt, 0, 0, user_prompt_tokens, &num_user_prompt_tokens);
+      encode_tiktoken(encoder, user_prompt, 0, 0, user_prompt_tokens, &num_user_prompt_tokens);
       for (int i = 0; i < num_user_prompt_tokens; i++) {
         prompt_tokens[num_prompt_tokens++] = user_prompt_tokens[i];
       }
@@ -963,9 +965,7 @@ void chat(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, char
 
     if (user_idx >= num_prompt_tokens && next != 128009 && next != 128001 && next != 128006) {
       // the Assistant is responding, so print its output
-      char *piece = decode(tokenizer, token, next);
-      safe_printf(piece); // same as printf("%s", piece), but skips "unsafe" bytes
-      fflush(stdout);
+      output(encoder, token, next);
     }
     if (user_idx >= num_prompt_tokens && next == 128009 || next == 128001) {
       printf("\n");
@@ -1070,6 +1070,9 @@ int main(int argc, char *argv[]) {
   Tokenizer tokenizer;
   build_tokenizer(&tokenizer, tokenizer_path, transformer.config.vocab_size);
 
+  TFilePathResourceReader reader("./cpp-tiktoken/tokenizer.model");
+  encoder = GptEncoding::get_encoding_llama3(LanguageModel::CL100K_BASE, &reader);
+  
   // build the Sampler
   Sampler sampler;
   build_sampler(&sampler, transformer.config.vocab_size, temperature, topp, rng_seed);

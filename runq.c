@@ -15,7 +15,6 @@
 #include <unistd.h>
 #endif
 
-#include "encoding.h"
 #include "util_llama3_tiktoken.h"
 
 // ----------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+#include "encoding.h"
 #include "emdedded_resource_reader.h"
 #include <fstream>
 #include <iostream>
