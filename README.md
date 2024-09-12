@@ -1,3 +1,14 @@
+## Adding cpp-tiketoken as the tokenizer
+This is a C++ version of llama3.c that uses cpp-tiktoken as the tokenizer.
+
+```bash
+git submodule update --init
+sudo apt install libfmt-dev libpcre2-dev # dependency for Ubuntu 22.04
+make
+```
+
+I've tested it with both Llama3 and Llama3.1 8B-Instruct weights.
+
 ## llama3.c - A faithful clone of Karpathy's llama2.c but fully functional with LLaMA 3 8B base and instruct models.
 
 See [Andrej Karpathy's repo](https://github.com/karpathy/llama2.c) for the real deal built for llama2.c architecture and many other cool models he has built.
