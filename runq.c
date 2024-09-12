@@ -929,29 +929,15 @@ void generate(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, 
   if (prompt == NULL) {
     prompt = empty_prompt;
   }
-
+  
   // encode the (string) prompt into tokens sequence
   int num_prompt_tokens = 0;
-  //  int *prompt_tokens = (int *)malloc((strlen(prompt) + 3) * sizeof(int)); // +3 for '\0', ?BOS, ?EOS
-  //  encode(tokenizer, prompt, 1, 0, prompt_tokens, &num_prompt_tokens);
-  //  if (num_prompt_tokens < 1) {
-  //    fprintf(stderr, "something is wrong, expected at least 1 prompt token\n");
-  //    exit(EXIT_FAILURE);
-  //  }
-
-  TFilePathResourceReader reader("./cpp-tiktoken/tokenizer.model");
-  auto encoder = GptEncoding::get_encoding_llama3(LanguageModel::CL100K_BASE, &reader);
-  //  auto encoder = GptEncoding::get_encoding_llama3(LanguageModel::O200K_BASE, &reader);
-  auto tokens = encoder->encode(prompt, {}, {});
-  //  auto tokens = encoder->encode(prompt);
-  //  std::cout << "enc " << tokens.size() << "\n";
-
-  // add BOS
-  tokens.insert(tokens.begin(), 128000);
-  //  std::cout << "enc " << tokens.size() << "\n";
-    
-  int *prompt_tokens = tokens.data();
-  num_prompt_tokens = tokens.size();
+  int *prompt_tokens = (int *)malloc((strlen(prompt) + 3) * sizeof(int));
+  encode_tiktoken(encoder, prompt, 1, 0, prompt_tokens, &num_prompt_tokens);
+  if (num_prompt_tokens < 1) {
+    fprintf(stderr, "something is wrong, expected at least 1 prompt token\n");
+    exit(EXIT_FAILURE);
+  }
   
   // start the main loop
   long start = 0;               // used to time our code, only initialized after first iteration
@@ -977,15 +963,13 @@ void generate(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, 
     // data-dependent terminating condition: the BOS (=1) token delimits sequences
     if ((next == 128001 || next == 128009) && pos > num_prompt_tokens)
       break;
+
     // print the token as string, decode it with the Tokenizer object
     //    char *piece = decode(tokenizer, token, next);
     //    safe_printf(piece); // same as printf("%s", piece), but skips "unsafe" bytes
     //    fflush(stdout);
 
-    std::vector<int> tmp;
-    tmp.push_back(next);
-    std::cout << encoder->decode(tmp) << std::flush;
-
+    output(encoder, token, next);
     token = next;
 
     // init the timer here because the first iteration can be slower
@@ -1001,7 +985,7 @@ void generate(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, 
     fprintf(stderr, "achieved tok/s: %f\n", (pos - 1) / (double)(end - start) * 1000);
   }
 
-  //  free(prompt_tokens);
+  free(prompt_tokens);
 }
 
 void read_stdin(const char *guide, char *buffer, size_t bufsize) {
@@ -1060,7 +1044,8 @@ void chat(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, char
         }
         if (system_prompt != NULL) {
           int num_system_prompt_tokens = 0;
-          encode(tokenizer, system_prompt, 0, 0, system_prompt_tokens, &num_system_prompt_tokens);
+	  //          encode(tokenizer, system_prompt, 0, 0, system_prompt_tokens, &num_system_prompt_tokens);
+          encode_tiktoken(encoder, system_prompt, 0, 0, system_prompt_tokens, &num_system_prompt_tokens);
           for (int i = 0; i < num_system_prompt_tokens; i++) {
             prompt_tokens[num_prompt_tokens++] = system_prompt_tokens[i];
           }
@@ -1085,7 +1070,8 @@ void chat(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, char
       }
       int num_user_prompt_tokens = 0;
       // encode the user prompt into tokens
-      encode(tokenizer, user_prompt, 0, 0, user_prompt_tokens, &num_user_prompt_tokens);
+      //encode(tokenizer, user_prompt, 0, 0, user_prompt_tokens, &num_user_prompt_tokens);
+      encode_tiktoken(encoder, user_prompt, 0, 0, user_prompt_tokens, &num_user_prompt_tokens);
       for (int i = 0; i < num_user_prompt_tokens; i++) {
         prompt_tokens[num_prompt_tokens++] = user_prompt_tokens[i];
       }
@@ -1120,9 +1106,10 @@ void chat(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, char
 
     if (user_idx >= num_prompt_tokens && next != 128009 && next != 128001 && next != 128006) {
       // the Assistant is responding, so print its output
-      char *piece = decode(tokenizer, token, next);
-      safe_printf(piece); // same as printf("%s", piece), but skips "unsafe" bytes
-      fflush(stdout);
+      //      char *piece = decode(tokenizer, token, next);
+      //      safe_printf(piece); // same as printf("%s", piece), but skips "unsafe" bytes
+      //      fflush(stdout);
+      output(encoder, token, next);
     }
     if (user_idx >= num_prompt_tokens && next == 128009 || next == 128001) {
       printf("\n");
@@ -1227,6 +1214,9 @@ int main(int argc, char *argv[]) {
   Tokenizer tokenizer;
   build_tokenizer(&tokenizer, tokenizer_path, transformer.config.vocab_size);
 
+  TFilePathResourceReader reader("./cpp-tiktoken/tokenizer.model");
+  encoder = GptEncoding::get_encoding_llama3(LanguageModel::CL100K_BASE, &reader);
+  
   // build the Sampler
   Sampler sampler;
   build_sampler(&sampler, transformer.config.vocab_size, temperature, topp, rng_seed);
