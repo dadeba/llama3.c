@@ -540,7 +540,7 @@ def load_hf_model(model_path):
     config.vocab_size = hf_model.config.vocab_size
     config.hidden_dim = hf_model.config.intermediate_size
     config.norm_eps = hf_model.config.rms_norm_eps
-    config.max_seq_len = hf_model.config.max_position_embeddings
+    config.max_seq_len = min(hf_model.config.max_position_embeddings, 2048) # for safety
 
     # create a new Transformer object and set weights
     model = Transformer(config)
