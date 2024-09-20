@@ -235,7 +235,7 @@ void softmax(float *x, int size) {
   }
 }
 
-void matmul(float *xout, float *x, float *w, int n, int d) {
+void matmul(float *xout, const float *x, const float *w, const int n, const int d) {
   // W (d,n) @ x (n,) -> xout (d,)
   // by far the most amount of time is spent inside this little function
   int i;
@@ -247,6 +247,31 @@ void matmul(float *xout, float *x, float *w, int n, int d) {
     }
     xout[i] = val;
   }
+}
+
+void __attribute__((noinline)) matmul_q(float *xout, const float *x, const float *w, const int n, const int d) {
+#include "matmul.h"
+}
+void __attribute__((noinline)) matmul_v(float *xout, const float *x, const float *w, const int n, const int d) {
+#include "matmul.h"
+}
+void __attribute__((noinline)) matmul_k(float *xout, const float *x, const float *w, const int n, const int d) {
+#include "matmul.h"
+}
+void __attribute__((noinline)) matmul_xb2(float *xout, const float *x, const float *w, const int n, const int d) {
+#include "matmul.h"
+}
+void __attribute__((noinline)) matmul_hb(float *xout, const float *x, const float *w, const int n, const int d) {
+#include "matmul.h"
+}
+void __attribute__((noinline)) matmul_hb2(float *xout, const float *x, const float *w, const int n, const int d) {
+#include "matmul.h"
+}
+void __attribute__((noinline)) matmul_ffn(float *xout, const float *x, const float *w, const int n, const int d) {
+#include "matmul.h"
+}
+void __attribute__((noinline)) matmul_cls(float *xout, const float *x, const float *w, const int n, const int d) {
+#include "matmul.h"
 }
 
 float *forward(Transformer *transformer, int token, int pos) {
@@ -278,9 +303,9 @@ float *forward(Transformer *transformer, int token, int pos) {
     s->v = s->value_cache + loff + pos * kv_dim;
 
     // qkv matmuls for this position
-    matmul(s->q, s->xb, w->wq + l * dim * dim, dim, dim);
-    matmul(s->k, s->xb, w->wk + l * dim * kv_dim, dim, kv_dim);
-    matmul(s->v, s->xb, w->wv + l * dim * kv_dim, dim, kv_dim);
+    matmul_q(s->q, s->xb, w->wq + l * dim * dim, dim, dim);
+    matmul_k(s->k, s->xb, w->wk + l * dim * kv_dim, dim, kv_dim);
+    matmul_v(s->v, s->xb, w->wv + l * dim * kv_dim, dim, kv_dim);
 
     // RoPE relative positional encoding: complex-valued rotate q and k in each head
     for (int i = 0; i < p->n_heads; i++) {
@@ -343,7 +368,7 @@ float *forward(Transformer *transformer, int token, int pos) {
     }
 
     // final matmul to get the output of the attention
-    matmul(s->xb2, s->xb, w->wo + l * dim * dim, dim, dim);
+    matmul_xb2(s->xb2, s->xb, w->wo + l * dim * dim, dim, dim);
 
     // residual connection back into x
     for (int i = 0; i < dim; i++) {
@@ -355,8 +380,8 @@ float *forward(Transformer *transformer, int token, int pos) {
 
     // Now for FFN in PyTorch we have: self.w2(F.silu(self.w1(x)) * self.w3(x))
     // first calculate self.w1(x) and self.w3(x)
-    matmul(s->hb, s->xb, w->w1 + l * dim * hidden_dim, dim, hidden_dim);
-    matmul(s->hb2, s->xb, w->w3 + l * dim * hidden_dim, dim, hidden_dim);
+    matmul_hb(s->hb, s->xb, w->w1 + l * dim * hidden_dim, dim, hidden_dim);
+    matmul_hb2(s->hb2, s->xb, w->w3 + l * dim * hidden_dim, dim, hidden_dim);
 
     // SwiGLU non-linearity
     for (int i = 0; i < hidden_dim; i++) {
@@ -369,7 +394,7 @@ float *forward(Transformer *transformer, int token, int pos) {
     }
 
     // final matmul to get the output of the ffn
-    matmul(s->xb, s->hb, w->w2 + l * dim * hidden_dim, hidden_dim, dim);
+    matmul_ffn(s->xb, s->hb, w->w2 + l * dim * hidden_dim, hidden_dim, dim);
 
     // residual connection
     for (int i = 0; i < dim; i++) {
@@ -381,7 +406,7 @@ float *forward(Transformer *transformer, int token, int pos) {
   rmsnorm(x, x, w->rms_final_weight, dim);
 
   // classifier into logits
-  matmul(s->logits, x, w->wcls, p->dim, p->vocab_size);
+  matmul_cls(s->logits, x, w->wcls, p->dim, p->vocab_size);
   return s->logits;
 }
 

@@ -3,8 +3,10 @@ CXX     = g++
 DIRTIKTOKEN=./cpp-tiktoken
 LIBTIKTOKEN=libcpptiktoken.a
 
-CPPFLAGS= -Wall -O3 -march=native -fopenmp -fpermissive -I$(DIRTIKTOKEN)
-LFLAGS= -fopenmp -lpcre2-8 -lfmt
+OMP=-fopenmp
+
+CPPFLAGS= -Wall -O3 -march=native $(OMP) -fpermissive -I$(DIRTIKTOKEN)
+LFLAGS= $(OMP) -lpcre2-8 -lfmt
 
 LIBSRCS = $(shell find $(DIRTIKTOKEN) -name '*.cc' )
 LIBOBJS = $(LIBSRCS:.cc=.o)
