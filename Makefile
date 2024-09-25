@@ -1,30 +1,27 @@
 CXX     = g++
 
-DIRTIKTOKEN=./cpp-tiktoken
-LIBTIKTOKEN=libcpptiktoken.a
+DIRSP=/usr/local/
+LIBSP=-lsentencepiece
 
-CPPFLAGS= -Wall -O3 -march=native -fopenmp -fpermissive -I$(DIRTIKTOKEN)
-LFLAGS= -fopenmp -lpcre2-8 -lfmt
+CPPFLAGS= -Wall -O3 -march=native -fopenmp -fpermissive -I$(DIRTIKTOKEN) -I$(DIRSP)/include
+LFLAGS= -fopenmp -L$(DIRSP)/lib $(LIBSP)
 
 LIBSRCS = $(shell find $(DIRTIKTOKEN) -name '*.cc' )
 LIBOBJS = $(LIBSRCS:.cc=.o)
 
 default: runq run
 
-run: run.o $(LIBTIKTOKEN)
-	$(CXX) -o $@ $< $(LIBTIKTOKEN) $(LFLAGS)
+run: run.o
+	$(CXX) -o $@ $< $(LFLAGS)
 
-runq: runq.o $(LIBTIKTOKEN)
-	$(CXX) -o $@ $< $(LIBTIKTOKEN) $(LFLAGS)
+runq: runq.o
+	$(CXX) -o $@ $< $(LFLAGS)
 
 %.o: %.c
 	$(CXX) $(CPPFLAGS) -c $<
 
 %.o: %.cc
 	$(CXX) $(CPPFLAGS) -c $< -o $@
-
-$(LIBTIKTOKEN): $(LIBOBJS)
-	ar rcs $@ $(LIBOBJS)
 
 clean:;
 	rm -rf *.o runq run $(LIBOBJS) $(LIBTIKTOKEN)
