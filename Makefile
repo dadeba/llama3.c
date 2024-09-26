@@ -4,8 +4,8 @@ DIRSENTENCEPIECE=./sentencepiece
 INCSP=-I$(DIRSENTENCEPIECE)/src
 LIBSP=-L$(DIRSENTENCEPIECE)/build/src -lsentencepiece
 
-CPPFLAGS= -Wall -O3 -march=native -fopenmp -fpermissive
-LFLAGS= -fopenmp -L$(DIRSP)/lib $(LIBSP)
+CPPFLAGS= -Wall -O3 -march=native -fopenmp -fpermissive $(INCSP)
+LFLAGS= -fopenmp $(LIBSP)
 
 default: runq run
 
