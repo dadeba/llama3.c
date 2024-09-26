@@ -1,3 +1,6 @@
 [submodule "cpp-tiktoken"]
 	path = cpp-tiktoken
 	url = https://github.com/gh-markt/cpp-tiktoken
+[submodule "sentencepiece"]
+	path = sentencepiece
+	url = https://github.com/google/sentencepiece

@@ -1,13 +1,11 @@
 CXX     = g++
 
-DIRSP=/usr/local/
-LIBSP=-lsentencepiece
+DIRSENTENCEPIECE=./sentencepiece
+INCSP=-I$(DIRSENTENCEPIECE)/src
+LIBSP=-L$(DIRSENTENCEPIECE)/build/src -lsentencepiece
 
-CPPFLAGS= -Wall -O3 -march=native -fopenmp -fpermissive -I$(DIRTIKTOKEN) -I$(DIRSP)/include
+CPPFLAGS= -Wall -O3 -march=native -fopenmp -fpermissive
 LFLAGS= -fopenmp -L$(DIRSP)/lib $(LIBSP)
-
-LIBSRCS = $(shell find $(DIRTIKTOKEN) -name '*.cc' )
-LIBOBJS = $(LIBSRCS:.cc=.o)
 
 default: runq run
 
@@ -24,4 +22,4 @@ runq: runq.o
 	$(CXX) $(CPPFLAGS) -c $< -o $@
 
 clean:;
-	rm -rf *.o runq run $(LIBOBJS) $(LIBTIKTOKEN)
+	rm -rf *.o runq run
