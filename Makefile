@@ -2,7 +2,7 @@ CXX     = g++
 
 DIRSENTENCEPIECE=./sentencepiece
 INCSP=-I$(DIRSENTENCEPIECE)/src
-LIBSP=-L$(DIRSENTENCEPIECE)/build/src -lsentencepiece
+LIBSP=-static -L$(DIRSENTENCEPIECE)/build/src -lsentencepiece
 
 CPPFLAGS= -Wall -O3 -march=native -fopenmp -fpermissive $(INCSP)
 LFLAGS= -fopenmp $(LIBSP)
@@ -15,7 +15,7 @@ run: run.o
 runq: runq.o
 	$(CXX) -o $@ $< $(LFLAGS)
 
-%.o: %.c
+%.o: %.c util_sentencepiece.h
 	$(CXX) $(CPPFLAGS) -c $<
 
 %.o: %.cc
