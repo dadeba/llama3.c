@@ -776,30 +776,7 @@ void chat(Transformer *transformer, Sampler *sampler, char *cli_user_prompt, cha
 
     // when it is the user's turn to contribute tokens to the dialog...
     if (user_turn) {
-      // get the (optional) system prompt at position 0
-      if (pos == 0) {
-        // at position 0, the user can also contribute a system prompt
-	//        prompt_tokens[num_prompt_tokens++] = 1;
-	/*
-        if (cli_system_prompt == NULL) {
-          // system prompt was not passed in, attempt to get it from stdin
-          read_stdin("Enter system prompt (optional): ", system_prompt, 32768);
-        } else {
-          // system prompt was passed in, use it
-          strcpy(system_prompt, cli_system_prompt);
-        }
-        if (system_prompt != NULL) {
-          int num_system_prompt_tokens = 0;
-	  //	  encode(tokenizer, system_prompt, 0, 0, system_prompt_tokens, &num_system_prompt_tokens);
- 	  //          encode_tiktoken(encoder, system_prompt, 0, 0, system_prompt_tokens, &num_system_prompt_tokens);
-          for (int i = 0; i < num_system_prompt_tokens; i++) {
-            prompt_tokens[num_prompt_tokens++] = system_prompt_tokens[i];
-          }
-        }
-	*/
-      } else {
-        num_prompt_tokens = 0;
-      }
+      num_prompt_tokens = 0;
       // get the user prompt
       if (pos == 0 && cli_user_prompt != NULL) {
         // user prompt for position 0 was passed in, use it
@@ -832,7 +809,7 @@ void chat(Transformer *transformer, Sampler *sampler, char *cli_user_prompt, cha
       // otherwise use the next token sampled from previous turn
       token = next;
     }
-    // EOS (=128009) token ends the Assistant turn
+    // EOS (=2) token ends the Assistant turn
     if (user_idx >= num_prompt_tokens && (token == 2)) {
       user_turn = 1;
     }

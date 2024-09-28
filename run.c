@@ -580,7 +580,7 @@ void generate(Transformer *transformer, Sampler *sampler, char *prompt, int step
     }
     pos++;
 
-    // data-dependent terminating condition: the BOS (=1) token delimits sequences
+    // data-dependent terminating condition: the EOS (=2) token delimits sequences
     if ((next == 2) && pos > num_prompt_tokens)
       break;
 
@@ -675,7 +675,7 @@ void chat(Transformer *transformer, Sampler *sampler, char *cli_user_prompt, cha
       // otherwise use the next token sampled from previous turn
       token = next;
     }
-    // EOS (=128009) token ends the Assistant turn
+    // EOS (=2) token ends the Assistant turn
     if (user_idx >= num_prompt_tokens && (token == 2)) {
       user_turn = 1;
     }
