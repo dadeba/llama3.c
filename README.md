@@ -21,7 +21,7 @@ cd ../../
 # build run runq
 make
 
-# convert llm-jp--3-1.8b-instruct model from HF into the int8 format
+# convert llm-jp-3-1.8b-instruct model from HF into the int8 format
 python3 ./export.py --version 2 --hf llm-jp/llm-jp-3-1.8b-instruct llm-jp-3-1.8b_q8.bin
 
 # run a sample script
