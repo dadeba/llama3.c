@@ -1,5 +1,5 @@
 ## Using sentencepiece as the tokenizer for llm-jp-3 models
-This is a C++ version of llama3.c that support llm-jp-3 models.
+This is a C++ version of llama3.c that supports llm-jp-3 models.
 
 ### Download the tokenizer file
 ```bash
