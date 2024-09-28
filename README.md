@@ -26,6 +26,9 @@ python3 ./export.py --version 2 --hf llm-jp/llm-jp-3-1.8b-instruct llm-jp-3-1.8b
 
 # chat mode
 ./runq ./llm-jp-3-1.8b_q8.bin -m chat -z ../llm-jp-tokenizer/models/ver3.0/llm-jp-tokenizer-100k.ver3.0b1.model 
+
+# run a sample script
+./exe_llmjp.sh
 ```
 
 ## llama3.c - A faithful clone of Karpathy's llama2.c but fully functional with LLaMA 3 8B base and instruct models.
