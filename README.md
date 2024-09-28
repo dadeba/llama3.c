@@ -9,6 +9,9 @@ The tokenizer file is "llm-jp-tokenizer/models/ver3.0/llm-jp-tokenizer-100k.ver3
 
 ### Build and run
 ```bash
+# check out the branch
+git checkout llm-jp
+
 ### build sentencepiece
 git submodule update --init       
 cd sentencepiece
