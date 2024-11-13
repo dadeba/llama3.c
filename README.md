@@ -1,31 +1,35 @@
 ## Using sentencepiece as the tokenizer for llm-jp-3 models
 This is a C++ version of llama3.c that supports llm-jp-3 models.
 
-### Download the tokenizer file
+# build and run on macOS
+
 ```bash
+cd llama3.c
+
+# Download the tokenizer file
 git clone https://github.com/llm-jp/llm-jp-tokenizer
-```
-The tokenizer file is "llm-jp-tokenizer/models/ver3.0/llm-jp-tokenizer-100k.ver3.0b1.model" 
 
-### Build and run
-```bash
-# check out the branch
-git checkout llm-jp
+# checkout this branch
+git checkout llm-jp-mac
 
-### build sentencepiece
+# initilize sentencepiece module
 git submodule update --init       
+
+# build sentencepiece
 cd sentencepiece
 mkdir build
 cd build
+export CXX=g++-14
 cmake ..
 make
-cd ../../
+cd ../..
+ln -s sentencepiece/build/src/libsentencepiece.0.dylib
 
-# build run runq
+# build
 make
 
-# convert llm-jp-3-1.8b-instruct model from HF into the int8 format
-python3 ./export.py --version 2 --hf llm-jp/llm-jp-3-1.8b-instruct llm-jp-3-1.8b_q8.bin
+# download a weight file (1.8B model)
+curl -O https://galaxy.u-aizu.ac.jp/2024/llama3/llm-jp-3-1.8b_q8.bin
 
 # run a sample script
 ./exe_llmjp.sh

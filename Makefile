@@ -1,8 +1,8 @@
-CXX     = g++
+CXX     = g++-14
 
 DIRSENTENCEPIECE=./sentencepiece
 INCSP=-I$(DIRSENTENCEPIECE)/src
-LIBSP=-static -L$(DIRSENTENCEPIECE)/build/src -lsentencepiece
+LIBSP=-L$(DIRSENTENCEPIECE)/build/src -lsentencepiece
 
 CPPFLAGS= -Wall -O3 -march=native -fopenmp -fpermissive $(INCSP)
 LFLAGS= -fopenmp $(LIBSP)
